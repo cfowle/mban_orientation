@@ -1,6 +1,6 @@
 ---
-title: "Day 1 mini-project"
-author: "By Anonymous Analyst Extraordinaire"
+title: "Boston Hot Spots"
+author: "Julia Monti & Carrie Fowle"
 output: 
   flexdashboard::flex_dashboard:
     orientation: columns
@@ -31,6 +31,7 @@ output:
 library(flexdashboard)
 library(tidyverse)
 library(lubridate)
+library(kableExtra)
 ```
 
 ```{r data_prep}
@@ -44,14 +45,15 @@ listings <- clean_prices(listings)
 calendar <- clean_prices(calendar)
 ```
 
-# A First Tab
 
-Column {data-width=650}
+Column {data-width=550}
 -----------------------------------------------------------------------
 
-### A map! 
+### Heat map of Maximum Prices 
 
-```{r box_1}
+Here we look at the maximum prices during July. We presume that this is the peak of tourist season and that business travel is low. To show finer granularity, listings with a nightly price of more than $1000 USD are excluded.
+
+```{r heatmap}
 
 library(ggmap)
 
@@ -63,57 +65,60 @@ boston_coords <- c(left   = -71.1289,
 basemap <- get_map(location = boston_coords,
 				maptype = 'terrain')
 
+deltas = calendar %>%
+  filter(month(date) == 7) %>%
+  group_by(listing_id) %>%
+  summarise(max_p = max(price),
+            delta_p = max(price) - min(price)) %>%
+  right_join(listings,
+             by = c("listing_id" = "id")) %>%
+  filter(max_p < 1000)
+
 ggmap(basemap) + 
-	geom_point(aes(x = longitude, y = latitude), 
-			   data = listings, 
-			   size = .5)
-```
-
-Column {data-width=350}
------------------------------------------------------------------------
-
-### Box 2
-
-Frequently, visualization for decision-makers are most useful when accompanied by analysis, interpretation, and sometimes a recommendation by the analyst. Feel free to fill in your own commentary on your visualizations in this box or the one below. You can leave the `R` code chunk blank for your commentary box. 
-
-```{r box_2}
-
-```
-
-### A different visualization! 
-
-```{r box_3}
-# Put the code for a supporting visualization here. This visualization should add context and nuance, but expect the main visualization to convey the bulk of your message. 
-
-# This is not a good visualization -- always remember to include titles and legends. Make yours better! 
-
-neighbourhood_lookup <- listings %>% 
-	select(id, neighbourhood)
-
-calendar %>% 
-	left_join(neighbourhood_lookup, by = c('listing_id' = 'id')) %>% 
-	group_by(neighbourhood, date) %>% 
-	summarise(price = mean(price), n = n()) %>% 
-	filter(n > 100) %>%
-	ggplot() +
-	aes(x = date, y = price, color = neighbourhood) + 
-	geom_line() + 
-	guides(color = FALSE)
+	geom_point(aes(x = longitude, y = latitude, color = max_p), 
+			   data = deltas, 
+			   size = .5) +
+  labs(color = "Maximum July Price") +
+  scale_color_gradient(low = "grey",
+                        high = "red")
 ```
 
 
-# A Second Tab
 
-
-Column {data-width=650}
+Column {data-width=450}
 -----------------------------------------------------------------------
 
-### Box 1
+###Average Maximum July Price by Neighborhood
 
-Your dashboard is allowed to have multiple tabs! Only use it if you need it. 
+```{r max_by_hood}
+deltas %>%
+  group_by(neighbourhood) %>%
+  summarise(avg_max = mean(max_p, na.rm = TRUE)) %>%
+  ggplot() +
+  aes(x = reorder(neighbourhood, avg_max),
+      y = avg_max) +
+  geom_bar(stat = "Identity") +
+  theme_minimal() +
+  coord_flip() +
+  xlab("Neighborhood") +
+  ylab("Maximum July Price")
+```
 
-Column {data-width=350}
------------------------------------------------------------------------
+### Top Places to Visit
 
-### Box 2
+We presume that the most popular places to visit have the highest prices. Based off our analysis of max prices the following neighborhoods seem like hot spots to check out:
+
+
+```{r top_table}
+
+deltas %>%
+  group_by(neighbourhood) %>%
+  summarise(avg_max = mean(max_p, na.rm = TRUE)) %>%
+  arrange(desc(avg_max)) %>%
+  select(neighbourhood) %>%
+  head(n = 5) %>%
+  rename(Neighborhood = neighbourhood) %>%
+  kable()
+
+```
 
